@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Стили для календаря */
+.rbc-calendar {
+  @apply font-sans;
+}
+
+.rbc-toolbar {
+  @apply mb-4 flex flex-wrap justify-between items-center;
+}
+
+.rbc-toolbar-label {
+  @apply text-lg font-semibold text-gray-800;
+}
+
+.rbc-btn-group {
+  @apply inline-flex rounded-md shadow-sm;
+}
+
+.rbc-btn-group button {
+  @apply px-3 py-1.5 text-sm border border-gray-300 bg-white text-gray-700 first:rounded-l-md last:rounded-r-md hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-1 focus:ring-blue-500;
+}
+
+.rbc-btn-group button.rbc-active {
+  @apply bg-blue-50 text-blue-700 border-blue-300;
+}
+
+.rbc-event {
+  @apply rounded-md shadow-sm border-none;
+}
+
+.rbc-day-bg.rbc-today {
+  @apply bg-blue-50;
+}
+
+.rbc-date-cell {
+  @apply text-sm text-gray-700 p-1;
+}
+
+.rbc-month-row + .rbc-month-row {
+  @apply border-t border-gray-200;
+}
+
+.rbc-month-view, .rbc-time-view {
+  @apply rounded-lg overflow-hidden border border-gray-200;
+}
+
+.rbc-header {
+  @apply font-medium text-gray-700 py-2 border-b border-gray-200;
+}
+
+.rbc-agenda-view table.rbc-agenda-table {
+  @apply w-full border-collapse;
+}
+
+.rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  @apply border-b border-gray-200 p-2 text-left font-medium text-gray-700;
+}
+
+.rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  @apply border-b border-gray-200 p-2;
+}
+
+.rbc-agenda-time-cell {
+  @apply text-gray-600;
+}
+
+.rbc-agenda-date-cell, .rbc-agenda-event-cell {
+  @apply text-gray-800;
+}
