@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import boardService from '../../api/boardService';
-import type { BoardComplete, Card, Column, UserRole, Member } from '../../api/types';
+import type { BoardComplete, Card, Column, UserRole, Member, Tag } from '../../api/types';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
 import PermissionsModal from './PermissionsModal';
@@ -11,6 +11,7 @@ import CalendarView from './CalendarView';
 import TableView from './TableView';
 import DashboardView from './DashboardView';
 import UsersSidebar from './UsersSidebar';
+import TagsManageModal from './TagsManageModal';
 import {
   DndContext,
   DragOverlay,
@@ -39,6 +40,7 @@ import {
 } from '@dnd-kit/sortable';
 import { SortableColumn } from './SortableColumn';
 import UserAvatar from '../common/UserAvatar';
+import TagBadge from '../common/TagBadge';
 
 // Определяем локальные типы для событий DnD, так как они не экспортируются напрямую
 interface DragStartEvent {
@@ -112,6 +114,21 @@ const BoardPage = () => {
   // Состояние для отслеживания режима просмотра: 'kanban', 'calendar' или 'table'
   const [viewMode, setViewMode] = useState<'kanban' | 'calendar' | 'table' | 'dashboard'>('kanban');
 
+  // Добавляем новое состояние для боковой панели пользователей
+  const [isUsersSidebarOpen, setIsUsersSidebarOpen] = useState(false);
+
+  // Состояние для модального окна управления тегами
+  const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
+
+  // Состояние для фильтрации по тегам
+  const [selectedTagFilter, setSelectedTagFilter] = useState<number | null>(null);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+
+  // Добавляем состояние для модального окна с детальной информацией о карточке
+  const [isCardDetailModalOpen, setIsCardDetailModalOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [selectedCardColumnId, setSelectedCardColumnId] = useState<number | null>(null);
+
   // Настройка сенсоров и измерения для перетаскивания
   const [activeId, setActiveId] = useState<string | null>(null);
   const [clonedItems, setClonedItems] = useState<Column[] | null>(null);
@@ -139,6 +156,20 @@ const BoardPage = () => {
   const sortedColumns = useMemo(() => {
     return boardComplete ? [...boardComplete.columns].sort((a, b) => a.order - b.order) : [];
   }, [boardComplete]);
+
+  // Фильтруем колонки по выбранному тегу
+  const filteredColumns = useMemo(() => {
+    if (!selectedTagFilter) {
+      return sortedColumns;
+    }
+    
+    return sortedColumns.map(column => ({
+      ...column,
+      cards: column.cards.filter(card => 
+        card.tags && card.tags.some(tag => tag.id === selectedTagFilter)
+      )
+    }));
+  }, [sortedColumns, selectedTagFilter]);
 
   // Определяем роль текущего пользователя на доске
   const currentUserRole = useMemo<UserRole>(() => {
@@ -168,128 +199,6 @@ const BoardPage = () => {
   const canManageUsers = useMemo(() => {
     return currentUserRole === 'owner' || currentUserRole === 'admin';
   }, [currentUserRole]);
-
-  // Добавляем состояние для модального окна с детальной информацией о карточке
-  const [isCardDetailModalOpen, setIsCardDetailModalOpen] = useState(false);
-  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
-  const [selectedCardColumnId, setSelectedCardColumnId] = useState<number | null>(null);
-
-  // Добавляем новое состояние для боковой панели пользователей
-  const [isUsersSidebarOpen, setIsUsersSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    if (boardId) {
-      fetchBoardComplete(parseInt(boardId));
-    }
-  }, [boardId]);
-
-  // Функция для получения полной информации о доске через API
-  const fetchBoardComplete = async (id: number) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await boardService.getBoardComplete(id);
-      
-      // Дополнительный запрос для получения актуального списка пользователей
-      try {
-        const usersResponse = await boardService.getBoardUsers(id);
-        let boardUsers: Member[] = [];
-        
-        if (Array.isArray(usersResponse)) {
-          boardUsers = usersResponse;
-        } else if (usersResponse && 'users' in usersResponse && Array.isArray(usersResponse.users)) {
-          boardUsers = usersResponse.users;
-        }
-        
-        // Обновляем данные с актуальным списком пользователей
-        data.members = boardUsers;
-      } catch (userErr) {
-        console.error('Ошибка при загрузке пользователей доски:', userErr);
-      }
-      
-      setBoardComplete(data);
-      setEditForm({ title: data.title, description: data.description });
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка при загрузке доски');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleUpdateBoard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!boardComplete || !boardId) return;
-
-    try {
-      const updatedBoard = await boardService.updateBoard(parseInt(boardId), editForm);
-      setBoardComplete({
-        ...boardComplete,
-        title: updatedBoard.title,
-        description: updatedBoard.description,
-        updated_at: updatedBoard.updated_at
-      });
-      setIsEditing(false);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка при обновлении доски');
-    }
-  };
-
-  const handleDeleteBoard = async () => {
-    if (!boardComplete || !boardId) return;
-
-    if (window.confirm('Вы уверены, что хотите удалить эту доску?')) {
-      try {
-        await boardService.deleteBoard(parseInt(boardId));
-        navigate('/boards');
-      } catch (err: any) {
-        setError(err.response?.data?.detail || 'Ошибка при удалении доски');
-      }
-    }
-  };
-
-  // Обработчик для обновления доски после изменения прав доступа
-  const handleBoardUpdate = useCallback(() => {
-    if (boardId) {
-      // Обновляем только необходимые данные о разрешениях, а не всю доску
-      const updatePermissions = async () => {
-        try {
-          // Получаем только роль текущего пользователя через API пользователей доски
-          const usersResponse = await boardService.getBoardUsers(parseInt(boardId));
-          
-          let boardUsers: Member[] = [];
-          if (Array.isArray(usersResponse)) {
-            boardUsers = usersResponse;
-          } else if (usersResponse && 'users' in usersResponse && Array.isArray(usersResponse.users)) {
-            boardUsers = usersResponse.users;
-          }
-          
-          if (boardComplete && user) {
-            // Находим текущего пользователя в списке
-            const currentMember = boardUsers.find(member => member.id === user.id);
-            const newRole = currentMember?.role || 'member';
-            
-            // Обновляем только members и permissions в boardComplete
-            setBoardComplete(prev => {
-              if (!prev) return prev;
-              
-              return {
-                ...prev,
-                members: boardUsers
-              };
-            });
-          }
-        } catch (error) {
-          console.error('Ошибка при обновлении разрешений:', error);
-          // В случае ошибки, обновляем всю доску
-          if (boardId) {
-            fetchBoardComplete(parseInt(boardId));
-          }
-        }
-      };
-      
-      updatePermissions();
-    }
-  }, [boardId, boardComplete, user]);
 
   // Создание новой колонки
   const handleCreateColumn = async () => {
@@ -1187,6 +1096,149 @@ const BoardPage = () => {
     }
   }, [boardComplete]);
 
+  useEffect(() => {
+    if (boardId) {
+      fetchBoardComplete(parseInt(boardId));
+      fetchBoardTags(parseInt(boardId));
+    }
+  }, [boardId]);
+
+  // Сбрасываем фильтр тегов при переключении на неканбан режимы
+  useEffect(() => {
+    if (viewMode !== 'kanban' && selectedTagFilter !== null) {
+      setSelectedTagFilter(null);
+    }
+  }, [viewMode, selectedTagFilter]);
+
+  // Функция для получения полной информации о доске через API
+  const fetchBoardComplete = async (id: number) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await boardService.getBoardComplete(id);
+      
+      // Дополнительный запрос для получения актуального списка пользователей
+      try {
+        const usersResponse = await boardService.getBoardUsers(id);
+        let boardUsers: Member[] = [];
+        
+        if (Array.isArray(usersResponse)) {
+          boardUsers = usersResponse;
+        } else if (usersResponse && 'users' in usersResponse && Array.isArray(usersResponse.users)) {
+          boardUsers = usersResponse.users;
+        }
+        
+        // Обновляем данные с актуальным списком пользователей
+        data.members = boardUsers;
+      } catch (userErr) {
+        console.error('Ошибка при загрузке пользователей доски:', userErr);
+      }
+      
+      setBoardComplete(data);
+      setEditForm({ title: data.title, description: data.description });
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Ошибка при загрузке доски');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Функция для получения тегов доски
+  const fetchBoardTags = async (id: number) => {
+    try {
+      const tags = await boardService.getBoardTags(id);
+      setAvailableTags(tags);
+    } catch (err: any) {
+      console.error('Ошибка при загрузке тегов доски:', err);
+      setAvailableTags([]);
+    }
+  };
+
+  const handleUpdateBoard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!boardComplete || !boardId) return;
+
+    try {
+      const updatedBoard = await boardService.updateBoard(parseInt(boardId), editForm);
+      setBoardComplete({
+        ...boardComplete,
+        title: updatedBoard.title,
+        description: updatedBoard.description,
+        updated_at: updatedBoard.updated_at
+      });
+      setIsEditing(false);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Ошибка при обновлении доски');
+    }
+  };
+
+  const handleDeleteBoard = async () => {
+    if (!boardComplete || !boardId) return;
+
+    if (window.confirm('Вы уверены, что хотите удалить эту доску?')) {
+      try {
+        await boardService.deleteBoard(parseInt(boardId));
+        navigate('/boards');
+      } catch (err: any) {
+        setError(err.response?.data?.detail || 'Ошибка при удалении доски');
+      }
+    }
+  };
+
+  // Обработчик для обновления доски после изменения прав доступа
+  const handleBoardUpdate = useCallback(() => {
+    if (boardId) {
+      // Обновляем только необходимые данные о разрешениях, а не всю доску
+      const updatePermissions = async () => {
+        try {
+          // Получаем только роль текущего пользователя через API пользователей доски
+          const usersResponse = await boardService.getBoardUsers(parseInt(boardId));
+          
+          let boardUsers: Member[] = [];
+          if (Array.isArray(usersResponse)) {
+            boardUsers = usersResponse;
+          } else if (usersResponse && 'users' in usersResponse && Array.isArray(usersResponse.users)) {
+            boardUsers = usersResponse.users;
+          }
+          
+          if (boardComplete && user) {
+            // Находим текущего пользователя в списке
+            const currentMember = boardUsers.find(member => member.id === user.id);
+            const newRole = currentMember?.role || 'member';
+            
+            // Обновляем только members и permissions в boardComplete
+            setBoardComplete(prev => {
+              if (!prev) return prev;
+              
+              return {
+                ...prev,
+                members: boardUsers
+              };
+            });
+          }
+        } catch (error) {
+          console.error('Ошибка при обновлении разрешений:', error);
+          // В случае ошибки, обновляем всю доску
+          if (boardId) {
+            fetchBoardComplete(parseInt(boardId));
+          }
+        }
+      };
+      
+      updatePermissions();
+    }
+  }, [boardId, boardComplete, user]);
+
+  // Обработчик для обновления тегов
+  const handleTagsUpdate = useCallback(() => {
+    if (boardId) {
+      // Обновляем доску для получения актуальных тегов на карточках
+      fetchBoardComplete(parseInt(boardId));
+      // Обновляем список доступных тегов
+      fetchBoardTags(parseInt(boardId));
+    }
+  }, [boardId]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -1365,6 +1417,36 @@ const BoardPage = () => {
         </div>
       </div>
 
+      {/* Фильтры по тегам */}
+      {availableTags.length > 0 && viewMode === 'kanban' && (
+        <div className="flex justify-center mb-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-600">Фильтр по тегам:</span>
+            <button
+              onClick={() => setSelectedTagFilter(null)}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                selectedTagFilter === null
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Все
+            </button>
+            {availableTags.map(tag => (
+              <button
+                key={tag.id}
+                onClick={() => setSelectedTagFilter(tag.id)}
+                className={`transition-colors ${
+                  selectedTagFilter === tag.id ? 'ring-2 ring-blue-500' : ''
+                }`}
+              >
+                <TagBadge tag={tag} size="sm" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Содержимое доски с колонками и карточками */}
       <div className="mt-4">
         {viewMode === 'kanban' ? (
@@ -1379,10 +1461,10 @@ const BoardPage = () => {
           <div className="overflow-x-auto pb-6">
             <div className="flex space-x-4 min-w-max">
               <SortableContext
-                items={sortedColumns.map(col => createColumnId(col.id))}
+                items={filteredColumns.map(col => createColumnId(col.id))}
                 strategy={horizontalListSortingStrategy}
               >
-                {sortedColumns.map(column => (
+                {filteredColumns.map(column => (
                   <SortableColumn
                     key={column.id}
                     id={createColumnId(column.id)}
@@ -1552,6 +1634,10 @@ const BoardPage = () => {
           setIsPermissionsModalOpen(true);
           setIsSidebarOpen(false);
         }}
+        onOpenTagsModal={() => {
+          setIsTagsModalOpen(true);
+          setIsSidebarOpen(false);
+        }}
         currentUserRole={currentUserRole}
       />
       
@@ -1591,6 +1677,13 @@ const BoardPage = () => {
             onDeleteCard={handleDeleteCard}
             currentUserId={user.id}
             onCardChanged={handleCardDataChanged}
+          />
+          
+          <TagsManageModal
+            isOpen={isTagsModalOpen}
+            onClose={() => setIsTagsModalOpen(false)}
+            boardId={parseInt(boardId)}
+            onTagsChanged={handleTagsUpdate}
           />
         </>
       )}

@@ -12,7 +12,12 @@ import type {
   ChangeRoleRequest,
   UserRole,
   Comment,
-  UserBoardsStatsResponse
+  UserBoardsStatsResponse,
+  Tag,
+  TagCreate,
+  TagUpdate,
+  TagAssignment,
+  TagResponse
 } from './types';
 
 // Интерфейсы для аналитических данных
@@ -432,6 +437,103 @@ const boardService = {
   getUserBoardsFullStatistics: async (): Promise<UserBoardsStatsResponse> => {
     const response = await axiosClient.get('/boards/stats/full');
     return response.data;
+  },
+
+  // Методы работы с тегами
+
+  /**
+   * Создание нового тега
+   */
+  createTag: async (tagData: TagCreate): Promise<Tag> => {
+    try {
+      const response = await axiosClient.post('/tags', tagData);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  /**
+   * Получение всех тегов доски
+   */
+  getBoardTags: async (boardId: number): Promise<Tag[]> => {
+    try {
+      const response = await axiosClient.get(`/tags/board/${boardId}`);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  /**
+   * Получение тега по ID
+   */
+  getTag: async (tagId: number): Promise<Tag> => {
+    try {
+      const response = await axiosClient.get(`/tags/${tagId}`);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  /**
+   * Обновление тега
+   */
+  updateTag: async (tagId: number, tagData: TagUpdate): Promise<Tag> => {
+    try {
+      const response = await axiosClient.put(`/tags/${tagId}`, tagData);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  /**
+   * Удаление тега
+   */
+  deleteTag: async (tagId: number): Promise<void> => {
+    try {
+      await axiosClient.delete(`/tags/${tagId}`);
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  /**
+   * Получение тегов карточки
+   */
+  getCardTags: async (cardId: number): Promise<Tag[]> => {
+    try {
+      const response = await axiosClient.get(`/tags/card/${cardId}`);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  /**
+   * Назначение тега карточке
+   */
+  assignTagToCard: async (tagAssignment: TagAssignment): Promise<TagResponse> => {
+    try {
+      const response = await axiosClient.post('/tags/assign', tagAssignment);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+
+  /**
+   * Удаление тега с карточки
+   */
+  unassignTagFromCard: async (tagAssignment: TagAssignment): Promise<TagResponse> => {
+    try {
+      const response = await axiosClient.post('/tags/unassign', tagAssignment);
+      return response.data;
+    } catch (error) {
+      return handleError(error);
+    }
   },
 };
 

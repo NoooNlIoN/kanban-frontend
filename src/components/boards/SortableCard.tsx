@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import type { Card, User } from '../../api/types';
 import { CheckCircle, Circle } from 'lucide-react';
 import UserAvatar from '../common/UserAvatar';
+import TagBadge from '../common/TagBadge';
 
 interface SortableCardProps {
   id: string;
@@ -208,6 +209,24 @@ export function SortableCard({
             <p className="text-xs text-gray-500 mt-1 overflow-hidden text-ellipsis">
               {card.description}
             </p>
+          )}
+          
+          {/* Теги */}
+          {card.tags && card.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {card.tags.slice(0, 2).map(tag => (
+                <TagBadge 
+                  key={tag.id} 
+                  tag={tag} 
+                  size="sm" 
+                />
+              ))}
+              {card.tags.length > 2 && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-200 text-gray-700">
+                  +{card.tags.length - 2}
+                </span>
+              )}
+            </div>
           )}
         </div>
         

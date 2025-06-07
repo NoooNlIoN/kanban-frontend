@@ -61,6 +61,7 @@ export interface Card {
   comments: Comment[];
   assigned_users: (User | number)[];
   labels: Label[];
+  tags?: Tag[];
 }
 
 export interface Column {
@@ -129,4 +130,33 @@ export interface UserBoardsStatsResponse {
   boards: BoardFullStatsResponse[];
   total_boards: number;
   global_statistics: BoardStatistics;
+}
+
+// Интерфейсы для тегов
+export interface Tag {
+  id: number;
+  name: string;
+  color: string;
+  board_id: number;
+}
+
+export interface TagCreate {
+  name: string;
+  color: string;
+  board_id: number;
+}
+
+export interface TagUpdate {
+  name?: string;
+  color?: string;
+}
+
+export interface TagAssignment {
+  tag_id: number;
+  card_id: number;
+}
+
+export interface TagResponse {
+  status: string;
+  message: string;
 } 

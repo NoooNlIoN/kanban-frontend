@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import boardService from '../../api/boardService';
-import type { Card, Comment, User, Column } from '../../api/types';
+import type { Card, Comment, User, Column, Tag } from '../../api/types';
 import { CheckCircle, Circle, Calendar, User as UserIcon, MessageSquare, X } from 'lucide-react';
 import UserAvatar from '../common/UserAvatar';
+import TagBadge from '../common/TagBadge';
 
 interface CardDetailModalProps {
   isOpen: boolean;
@@ -74,6 +75,12 @@ const CardDetailModal = ({
   const [error, setError] = useState('');
   const [isMovingColumn, setIsMovingColumn] = useState(false);
 
+  // Состояния для работы с тегами
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [cardTags, setCardTags] = useState<Tag[]>([]);
+  const [isLoadingTags, setIsLoadingTags] = useState(false);
+  const [showTagsDropdown, setShowTagsDropdown] = useState(false);
+
   // Устанавливаем значения при открытии модального окна или изменении карточки
   useEffect(() => {
     if (card) {
@@ -104,7 +111,11 @@ const CardDetailModal = ({
       
       if (isOpen) {
         fetchComments();
+        fetchTags();
       }
+      
+      // Устанавливаем теги карточки
+      setCardTags(card.tags || []);
     }
   }, [card, isOpen, boardId, columnId]);
 
@@ -136,6 +147,19 @@ const CardDetailModal = ({
       setComments([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchTags = async () => {
+    try {
+      setIsLoadingTags(true);
+      const boardTags = await boardService.getBoardTags(boardId);
+      setAvailableTags(boardTags);
+    } catch (error) {
+      console.error('Ошибка при загрузке тегов доски:', error);
+      setAvailableTags([]);
+    } finally {
+      setIsLoadingTags(false);
     }
   };
 
@@ -342,6 +366,50 @@ const CardDetailModal = ({
       // Возвращаем исходное значение колонки
       setSelectedColumn(columnId);
       setIsMovingColumn(false);
+    }
+  };
+
+  const handleAssignTag = async (tag: Tag) => {
+    if (!card) return;
+    
+    try {
+      await boardService.assignTagToCard({ tag_id: tag.id, card_id: card.id });
+      
+      // Обновляем локальное состояние
+      const newCardTags = [...cardTags, tag];
+      setCardTags(newCardTags);
+      
+      // Обновляем карточку в родительском компоненте
+      if (onCardChanged) {
+        const updatedCard = { ...card, tags: newCardTags };
+        onCardChanged(updatedCard);
+      }
+      
+      setShowTagsDropdown(false);
+    } catch (error: any) {
+      console.error('Ошибка при назначении тега:', error);
+      setError(error.response?.data?.detail || 'Ошибка при назначении тега');
+    }
+  };
+
+  const handleRemoveTag = async (tagId: number) => {
+    if (!card) return;
+    
+    try {
+      await boardService.unassignTagFromCard({ tag_id: tagId, card_id: card.id });
+      
+      // Обновляем локальное состояние
+      const newCardTags = cardTags.filter(tag => tag.id !== tagId);
+      setCardTags(newCardTags);
+      
+      // Обновляем карточку в родительском компоненте
+      if (onCardChanged) {
+        const updatedCard = { ...card, tags: newCardTags };
+        onCardChanged(updatedCard);
+      }
+    } catch (error: any) {
+      console.error('Ошибка при удалении тега:', error);
+      setError(error.response?.data?.detail || 'Ошибка при удалении тега');
     }
   };
 
@@ -625,6 +693,71 @@ const CardDetailModal = ({
                             </button>
                           )}
                         </div>
+                      </div>
+                    </div>
+                    
+                    {/* Теги */}
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Теги</h3>
+                      
+                      {/* Отображение назначенных тегов */}
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {cardTags.length > 0 ? (
+                          cardTags.map(tag => (
+                            <TagBadge
+                              key={tag.id}
+                              tag={tag}
+                              size="sm"
+                              showRemove={true}
+                              onRemove={() => handleRemoveTag(tag.id)}
+                            />
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-500">Теги не назначены</p>
+                        )}
+                      </div>
+                      
+                      {/* Кнопка добавления тега */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowTagsDropdown(!showTagsDropdown)}
+                          className="w-full flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                          </svg>
+                          Добавить тег
+                        </button>
+                        
+                        {/* Выпадающий список доступных тегов */}
+                        {showTagsDropdown && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-10 max-h-48 overflow-y-auto">
+                            {isLoadingTags ? (
+                              <div className="p-3 text-center">
+                                <div className="w-4 h-4 border-t-2 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
+                              </div>
+                            ) : (
+                              <>
+                                {availableTags
+                                  .filter(tag => !cardTags.some(cardTag => cardTag.id === tag.id))
+                                  .map(tag => (
+                                    <button
+                                      key={tag.id}
+                                      onClick={() => handleAssignTag(tag)}
+                                      className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center"
+                                    >
+                                      <TagBadge tag={tag} size="sm" />
+                                    </button>
+                                  ))}
+                                {availableTags.filter(tag => !cardTags.some(cardTag => cardTag.id === tag.id)).length === 0 && (
+                                  <div className="p-3 text-sm text-gray-500 text-center">
+                                    Все теги уже назначены
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     
